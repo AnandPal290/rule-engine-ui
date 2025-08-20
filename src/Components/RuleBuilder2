@@ -1,4 +1,11 @@
-import React, { Component } from 'react';
+addNestedRule = (parentRuleId) => {
+    this.setState(prevState => ({
+      rules: this.updateRuleInState(prevState.rules, parentRuleId, (rule) => ({
+        ...rule,
+        nestedRules: [...rule.nestedRules, this.createNewRule()]
+      }))
+    }));
+  };import React, { Component } from 'react';
 import { Plus, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
 
 class ConditionalRuleBuilder extends Component {
@@ -243,13 +250,149 @@ class ConditionalRuleBuilder extends Component {
     }));
   };
 
-  addNestedRule = (parentRuleId) => {
-    this.setState(prevState => ({
-      rules: this.updateRuleInState(prevState.rules, parentRuleId, (rule) => ({
-        ...rule,
-        nestedRules: [...rule.nestedRules, this.createNewRule()]
-      }))
-    }));
+  generateYAMLPreview = () => {
+    const convertRuleToYAML = (rule, depth = 0) => {
+      const indent = '  '.repeat(depth);
+      let yaml = '';
+
+      // Add attempts variable if it's the root rule
+      if (depth === 0) {
+        yaml += `${indent}attempts: 0\n`;
+      }
+
+      // IF block
+      yaml += `${indent}if: `;
+
+      // Generate conditions
+      const conditions = this.formatConditionsForYAML(rule.conditions);
+      yaml += conditions + '\n';
+
+      // THEN block
+      yaml += `${indent}then:\n`;
+      rule.actions.forEach(action => {
+        yaml += `${indent}  ${action.field}: `;
+        if (action.type === 'Set') {
+          yaml += action.value;
+        } else if (action.type === 'Increment') {
+          yaml += `${action.field} + ${action.value}`;
+        } else if (action.type === 'Decrement') {
+          yaml += `${action.field} - ${action.value}`;
+        } else {
+          yaml += action.value;
+        }
+        yaml += '\n';
+      });
+
+      // Handle nested rules in THEN block
+      rule.nestedRules.forEach(nestedRule => {
+        yaml += convertRuleToYAML(nestedRule, depth + 1);
+      });
+
+      // ELSE IF block
+      if (rule.elseEnabled && rule.elseConditions.length > 0) {
+        yaml += `${indent}else_if:\n`;
+        yaml += `${indent}  if: `;
+        const elseConditions = this.formatConditionsForYAML(rule.elseConditions);
+        yaml += elseConditions + '\n';
+        yaml += `${indent}  then:\n`;
+        rule.elseActions.forEach(action => {
+          yaml += `${indent}    ${action.field}: `;
+          if (action.type === 'Set') {
+            yaml += action.value;
+          } else if (action.type === 'Increment') {
+            yaml += `${action.field} + ${action.value}`;
+          } else if (action.type === 'Decrement') {
+            yaml += `${action.field} - ${action.value}`;
+          } else {
+            yaml += action.value;
+          }
+          yaml += '\n';
+        });
+      } else if (rule.elseEnabled && rule.elseActions.length > 0) {
+        // ELSE block (without conditions)
+        yaml += `${indent}else:\n`;
+        rule.elseActions.forEach(action => {
+          yaml += `${indent}  ${action.field}: `;
+          if (action.type === 'Set') {
+            yaml += action.value;
+          } else if (action.type === 'Increment') {
+            yaml += `${action.field} + ${action.value}`;
+          } else if (action.type === 'Decrement') {
+            yaml += `${action.field} - ${action.value}`;
+          } else {
+            yaml += action.value;
+          }
+          yaml += '\n';
+        });
+      }
+
+      return yaml;
+    };
+
+    return this.state.rules.map(rule => convertRuleToYAML(rule)).join('\n---\n');
+  };
+
+  formatConditionsForYAML = (conditions) => {
+    if (conditions.length === 0) return 'true';
+
+    if (conditions.length === 1) {
+      const condition = conditions[0];
+      if (condition.type === 'group') {
+        return this.formatGroupCondition(condition);
+      } else {
+        return this.formatSingleCondition(condition);
+      }
+    }
+
+    // Multiple conditions - determine the logical operator
+    const logicalOp = conditions[0]?.logicalOperator === 'any' ? 'or' : 'and';
+    const formattedConditions = conditions.map(condition => {
+      if (condition.type === 'group') {
+        return `(${this.formatGroupCondition(condition)})`;
+      } else {
+        return this.formatSingleCondition(condition);
+      }
+    });
+
+    return `(${formattedConditions.join(` ${logicalOp} `)})`;
+  };
+
+  formatGroupCondition = (group) => {
+    const logicalOp = group.logicalOperator === 'any' ? 'or' : 'and';
+    const formattedConditions = group.conditions.map(condition =>
+      this.formatSingleCondition(condition)
+    );
+    return formattedConditions.join(` ${logicalOp} `);
+  };
+
+  formatSingleCondition = (condition) => {
+    const { field, operator, value } = condition;
+    let op = '';
+
+    switch (operator) {
+      case 'EqualsTo':
+        op = '=';
+        break;
+      case 'NotEqualTo':
+        op = '!=';
+        break;
+      case 'GreaterThan':
+        op = '>';
+        break;
+      case 'LessThan':
+        op = '<';
+        break;
+      case 'GreaterThanEqualTo':
+        op = '>=';
+        break;
+      case 'LessThanEqualTo':
+        op = '<=';
+        break;
+      default:
+        op = '=';
+    }
+
+    return `${field} ${op} ${value}`;
   };
 
   renderCondition = (condition, ruleId, isElse = false, groupId = null) => (
@@ -570,15 +713,24 @@ class ConditionalRuleBuilder extends Component {
                 onClick={() => console.log('Rules:', JSON.stringify(this.state.rules, null, 2))}
                 className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
               >
-                Export Rules
+                Export JSON
               </button>
             </div>
 
-            <div className="border-t pt-4">
-              <h3 className="font-semibold mb-2 text-gray-700">Current Rules Structure:</h3>
-              <pre className="text-xs bg-gray-100 p-3 rounded border overflow-auto max-h-64 text-gray-800">
-                {JSON.stringify(this.state.rules, null, 2)}
-              </pre>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
+                <h3 className="font-semibold mb-3 text-gray-700">YAML Preview:</h3>
+                <pre className="text-sm bg-gray-100 p-4 rounded border overflow-auto max-h-96 text-gray-800 font-mono">
+                  {this.generateYAMLPreview()}
+                </pre>
+              </div>
+
+              <div>
+                <h3 className="font-semibold mb-3 text-gray-700">JSON Structure:</h3>
+                <pre className="text-xs bg-gray-100 p-3 rounded border overflow-auto max-h-96 text-gray-800">
+                  {JSON.stringify(this.state.rules, null, 2)}
+                </pre>
+              </div>
             </div>
           </div>
         </div>
