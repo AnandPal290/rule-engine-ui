@@ -1,0 +1,590 @@
+import React, { Component } from 'react';
+import { Plus, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
+
+class ConditionalRuleBuilder extends Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      rules: [this.createNewRule()]
+    };
+  }
+
+  createNewRule = () => ({
+    id: Date.now() + Math.random(),
+    conditions: [this.createNewCondition()],
+    actions: [this.createNewAction()],
+    elseEnabled: false,
+    elseConditions: [],
+    elseActions: [],
+    nestedRules: []
+  });
+
+  createNewCondition = () => ({
+    id: Date.now() + Math.random(),
+    field: '',
+    operator: 'EqualsTo',
+    value: '',
+    logicalOperator: 'all'
+  });
+
+  createNewConditionGroup = () => ({
+    id: Date.now() + Math.random(),
+    type: 'group',
+    logicalOperator: 'all', // all/any for this group
+    conditions: [this.createNewCondition()]
+  });
+
+  createNewAction = () => ({
+    id: Date.now() + Math.random(),
+    type: 'Set',
+    field: '',
+    value: ''
+  });
+
+  addCondition = (ruleId, isElse = false) => {
+    this.setState(prevState => ({
+      rules: this.updateRuleInState(prevState.rules, ruleId, (rule) => {
+        const newCondition = this.createNewCondition();
+        if (isElse) {
+          return { ...rule, elseConditions: [...rule.elseConditions, newCondition] };
+        } else {
+          return { ...rule, conditions: [...rule.conditions, newCondition] };
+        }
+      })
+    }));
+  };
+
+  addConditionGroup = (ruleId, isElse = false) => {
+    this.setState(prevState => ({
+      rules: this.updateRuleInState(prevState.rules, ruleId, (rule) => {
+        const newConditionGroup = this.createNewConditionGroup();
+        if (isElse) {
+          return { ...rule, elseConditions: [...rule.elseConditions, newConditionGroup] };
+        } else {
+          return { ...rule, conditions: [...rule.conditions, newConditionGroup] };
+        }
+      })
+    }));
+  };
+
+  addConditionToGroup = (ruleId, groupId, isElse = false) => {
+    this.setState(prevState => ({
+      rules: this.updateRuleInState(prevState.rules, ruleId, (rule) => {
+        const conditionsKey = isElse ? 'elseConditions' : 'conditions';
+        return {
+          ...rule,
+          [conditionsKey]: rule[conditionsKey].map(item =>
+            item.id === groupId && item.type === 'group'
+              ? { ...item, conditions: [...item.conditions, this.createNewCondition()] }
+              : item
+          )
+        };
+      })
+    }));
+  };
+
+  updateConditionGroup = (ruleId, groupId, field, value, isElse = false) => {
+    this.setState(prevState => ({
+      rules: this.updateRuleInState(prevState.rules, ruleId, (rule) => {
+        const conditionsKey = isElse ? 'elseConditions' : 'conditions';
+        return {
+          ...rule,
+          [conditionsKey]: rule[conditionsKey].map(item =>
+            item.id === groupId && item.type === 'group'
+              ? { ...item, [field]: value }
+              : item
+          )
+        };
+      })
+    }));
+  };
+
+  updateConditionInGroup = (ruleId, groupId, conditionId, field, value, isElse = false) => {
+    this.setState(prevState => ({
+      rules: this.updateRuleInState(prevState.rules, ruleId, (rule) => {
+        const conditionsKey = isElse ? 'elseConditions' : 'conditions';
+        return {
+          ...rule,
+          [conditionsKey]: rule[conditionsKey].map(item =>
+            item.id === groupId && item.type === 'group'
+              ? {
+                  ...item,
+                  conditions: item.conditions.map(condition =>
+                    condition.id === conditionId
+                      ? { ...condition, [field]: value }
+                      : condition
+                  )
+                }
+              : item
+          )
+        };
+      })
+    }));
+  };
+
+  removeConditionFromGroup = (ruleId, groupId, conditionId, isElse = false) => {
+    this.setState(prevState => ({
+      rules: this.updateRuleInState(prevState.rules, ruleId, (rule) => {
+        const conditionsKey = isElse ? 'elseConditions' : 'conditions';
+        return {
+          ...rule,
+          [conditionsKey]: rule[conditionsKey].map(item =>
+            item.id === groupId && item.type === 'group'
+              ? {
+                  ...item,
+                  conditions: item.conditions.filter(condition => condition.id !== conditionId)
+                }
+              : item
+          )
+        };
+      })
+    }));
+  };
+
+  addAction = (ruleId, isElse = false) => {
+    this.setState(prevState => ({
+      rules: this.updateRuleInState(prevState.rules, ruleId, (rule) => {
+        const newAction = this.createNewAction();
+        if (isElse) {
+          return { ...rule, elseActions: [...rule.elseActions, newAction] };
+        } else {
+          return { ...rule, actions: [...rule.actions, newAction] };
+        }
+      })
+    }));
+  };
+
+  updateRuleInState = (rules, ruleId, updateFn) => {
+    return rules.map(rule => {
+      if (rule.id === ruleId) {
+        return updateFn(rule);
+      }
+      if (rule.nestedRules && rule.nestedRules.length > 0) {
+        return {
+          ...rule,
+          nestedRules: this.updateRuleInState(rule.nestedRules, ruleId, updateFn)
+        };
+      }
+      return rule;
+    });
+  };
+
+  updateCondition = (ruleId, conditionId, field, value, isElse = false) => {
+    this.setState(prevState => ({
+      rules: this.updateRuleInState(prevState.rules, ruleId, (rule) => {
+        const conditionsKey = isElse ? 'elseConditions' : 'conditions';
+        return {
+          ...rule,
+          [conditionsKey]: rule[conditionsKey].map(condition =>
+            condition.id === conditionId
+              ? { ...condition, [field]: value }
+              : condition
+          )
+        };
+      })
+    }));
+  };
+
+  updateAction = (ruleId, actionId, field, value, isElse = false) => {
+    this.setState(prevState => ({
+      rules: this.updateRuleInState(prevState.rules, ruleId, (rule) => {
+        const actionsKey = isElse ? 'elseActions' : 'actions';
+        return {
+          ...rule,
+          [actionsKey]: rule[actionsKey].map(action =>
+            action.id === actionId
+              ? { ...action, [field]: value }
+              : action
+          )
+        };
+      })
+    }));
+  };
+
+  removeCondition = (ruleId, conditionId, isElse = false) => {
+    this.setState(prevState => ({
+      rules: this.updateRuleInState(prevState.rules, ruleId, (rule) => {
+        const conditionsKey = isElse ? 'elseConditions' : 'conditions';
+        const updatedConditions = rule[conditionsKey].filter(condition => condition.id !== conditionId);
+        // Ensure at least one condition remains in the main conditions
+        if (!isElse && updatedConditions.length === 0) {
+          return { ...rule, [conditionsKey]: [this.createNewCondition()] };
+        }
+        return { ...rule, [conditionsKey]: updatedConditions };
+      })
+    }));
+  };
+
+  removeAction = (ruleId, actionId, isElse = false) => {
+    this.setState(prevState => ({
+      rules: this.updateRuleInState(prevState.rules, ruleId, (rule) => {
+        const actionsKey = isElse ? 'elseActions' : 'actions';
+        const updatedActions = rule[actionsKey].filter(action => action.id !== actionId);
+        // Ensure at least one action remains in the main actions
+        if (!isElse && updatedActions.length === 0) {
+          return { ...rule, [actionsKey]: [this.createNewAction()] };
+        }
+        return { ...rule, [actionsKey]: updatedActions };
+      })
+    }));
+  };
+
+  toggleElse = (ruleId) => {
+    this.setState(prevState => ({
+      rules: this.updateRuleInState(prevState.rules, ruleId, (rule) => {
+        const elseEnabled = !rule.elseEnabled;
+        return {
+          ...rule,
+          elseEnabled,
+          elseConditions: elseEnabled ? [this.createNewCondition()] : [],
+          elseActions: elseEnabled ? [this.createNewAction()] : []
+        };
+      })
+    }));
+  };
+
+  addNestedRule = (parentRuleId) => {
+    this.setState(prevState => ({
+      rules: this.updateRuleInState(prevState.rules, parentRuleId, (rule) => ({
+        ...rule,
+        nestedRules: [...rule.nestedRules, this.createNewRule()]
+      }))
+    }));
+  };
+
+  renderCondition = (condition, ruleId, isElse = false, groupId = null) => (
+    <div key={condition.id} className="flex items-center gap-2 mb-2 p-3 bg-gray-50 rounded-lg">
+      <select
+        value={condition.field}
+        onChange={(e) => {
+          if (groupId) {
+            this.updateConditionInGroup(ruleId, groupId, condition.id, 'field', e.target.value, isElse);
+          } else {
+            this.updateCondition(ruleId, condition.id, 'field', e.target.value, isElse);
+          }
+        }}
+        className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="">Select Field</option>
+        <option value="isAuthDecision">isAuthDecision</option>
+        <option value="authPostFlag">authPostFlag</option>
+        <option value="vipMarker">vipMarker</option>
+        <option value="score">score</option>
+        <option value="deviceScore">deviceScore</option>
+        <option value="ruleDecision">ruleDecision</option>
+      </select>
+
+      <select
+        value={condition.operator}
+        onChange={(e) => {
+          if (groupId) {
+            this.updateConditionInGroup(ruleId, groupId, condition.id, 'operator', e.target.value, isElse);
+          } else {
+            this.updateCondition(ruleId, condition.id, 'operator', e.target.value, isElse);
+          }
+        }}
+        className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="EqualsTo">Equals To</option>
+        <option value="NotEqualTo">Not Equal To</option>
+        <option value="GreaterThan">Greater Than</option>
+        <option value="LessThan">Less Than</option>
+        <option value="GreaterThanEqualTo">Greater Than Equal To</option>
+        <option value="LessThanEqualTo">Less Than Equal To</option>
+      </select>
+
+      <input
+        type="text"
+        value={condition.value}
+        onChange={(e) => {
+          if (groupId) {
+            this.updateConditionInGroup(ruleId, groupId, condition.id, 'value', e.target.value, isElse);
+          } else {
+            this.updateCondition(ruleId, condition.id, 'value', e.target.value, isElse);
+          }
+        }}
+        placeholder="Value"
+        className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+
+      <button
+        onClick={() => {
+          if (groupId) {
+            this.removeConditionFromGroup(ruleId, groupId, condition.id, isElse);
+          } else {
+            this.removeCondition(ruleId, condition.id, isElse);
+          }
+        }}
+        className="p-2 text-red-500 hover:bg-red-50 rounded-md"
+      >
+        <Trash2 size={16} />
+      </button>
+    </div>
+  );
+
+  renderConditionGroup = (group, ruleId, isElse = false) => (
+    <div key={group.id} className="mb-4 p-4 border-2 border-dashed border-blue-200 rounded-lg bg-blue-50">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-sm font-medium text-blue-700">Group:</span>
+        <select
+          value={group.logicalOperator}
+          onChange={(e) => this.updateConditionGroup(ruleId, group.id, 'logicalOperator', e.target.value, isElse)}
+          className="px-2 py-1 border border-blue-300 rounded text-sm bg-white"
+        >
+          <option value="all">All</option>
+          <option value="any">Any</option>
+        </select>
+        <span className="text-sm text-blue-600">of the following conditions:</span>
+        <button
+          onClick={() => this.removeCondition(ruleId, group.id, isElse)}
+          className="ml-auto p-1 text-red-500 hover:bg-red-50 rounded-md"
+          title="Remove Group"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+
+      <div className="ml-4">
+        {group.conditions.map(condition =>
+          this.renderCondition(condition, ruleId, isElse, group.id)
+        )}
+        <button
+          onClick={() => this.addConditionToGroup(ruleId, group.id, isElse)}
+          className="flex items-center gap-2 px-3 py-1 text-blue-600 hover:bg-blue-100 rounded-md border border-blue-200 text-sm"
+        >
+          <Plus size={14} />
+          Add Condition to Group
+        </button>
+      </div>
+    </div>
+  );
+
+  renderAction = (action, ruleId, isElse = false) => (
+    <div key={action.id} className="flex items-center gap-2 mb-2 p-3 bg-green-50 rounded-lg">
+      <select
+        value={action.type}
+        onChange={(e) => this.updateAction(ruleId, action.id, 'type', e.target.value, isElse)}
+        className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="Set">Set</option>
+        <option value="Increment">Increment</option>
+        <option value="Decrement">Decrement</option>
+        <option value="Append">Append</option>
+      </select>
+
+      <input
+        type="text"
+        value={action.field}
+        onChange={(e) => this.updateAction(ruleId, action.id, 'field', e.target.value, isElse)}
+        placeholder="Field"
+        className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+
+      <input
+        type="text"
+        value={action.value}
+        onChange={(e) => this.updateAction(ruleId, action.id, 'value', e.target.value, isElse)}
+        placeholder="Value"
+        className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+
+      <button
+        onClick={() => this.removeAction(ruleId, action.id, isElse)}
+        className="p-2 text-red-500 hover:bg-red-50 rounded-md"
+      >
+        <Trash2 size={16} />
+      </button>
+    </div>
+  );
+
+  renderRule = (rule, depth = 0) => (
+    <div key={rule.id} className={`border-2 border-dashed border-gray-300 rounded-lg p-4 mb-4 ${depth > 0 ? 'ml-8 bg-gray-50' : 'bg-white'}`}>
+      {/* IF Section */}
+      <div className="mb-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="font-semibold text-blue-600 text-lg">IF</span>
+          <select
+            value={rule.conditions[0]?.logicalOperator || 'all'}
+            onChange={(e) => this.updateCondition(rule.id, rule.conditions[0]?.id, 'logicalOperator', e.target.value)}
+            className="px-2 py-1 border border-gray-300 rounded text-sm"
+          >
+            <option value="all">All</option>
+            <option value="any">Any</option>
+          </select>
+          <span className="text-gray-500 text-sm">of the following conditions are met:</span>
+        </div>
+
+        <div className="ml-4">
+          {rule.conditions.map(item =>
+            item.type === 'group'
+              ? this.renderConditionGroup(item, rule.id)
+              : this.renderCondition(item, rule.id)
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={() => this.addCondition(rule.id)}
+              className="flex items-center gap-2 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-md border border-blue-200"
+            >
+              <Plus size={16} />
+              Add Condition
+            </button>
+            <button
+              onClick={() => this.addConditionGroup(rule.id)}
+              className="flex items-center gap-2 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-md border border-blue-200"
+            >
+              <Plus size={16} />
+              Add Group
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* THEN Section */}
+      <div className="mb-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="font-semibold text-green-600 text-lg">THEN</span>
+          <span className="text-gray-500 text-sm">execute the following actions:</span>
+        </div>
+
+        <div className="ml-4">
+          {rule.actions.map(action => this.renderAction(action, rule.id))}
+          <div className="flex gap-2">
+            <button
+              onClick={() => this.addAction(rule.id)}
+              className="flex items-center gap-2 px-3 py-2 text-green-600 hover:bg-green-50 rounded-md border border-green-200"
+            >
+              <Plus size={16} />
+              Add Action
+            </button>
+            <button
+              onClick={() => this.addNestedRule(rule.id)}
+              className="flex items-center gap-2 px-3 py-2 text-purple-600 hover:bg-purple-50 rounded-md border border-purple-200"
+            >
+              <Plus size={16} />
+              Add Nested Condition
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Nested Rules */}
+      {rule.nestedRules.length > 0 && (
+        <div className="ml-4 mb-4">
+          <div className="text-sm text-gray-600 mb-2 font-medium">Nested Rules:</div>
+          {rule.nestedRules.map(nestedRule => this.renderRule(nestedRule, depth + 1))}
+        </div>
+      )}
+
+      {/* ELSE Toggle */}
+      <div className="mb-4">
+        <button
+          onClick={() => this.toggleElse(rule.id)}
+          className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
+            rule.elseEnabled
+              ? 'bg-orange-100 text-orange-700 border border-orange-200'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+          }`}
+        >
+          {rule.elseEnabled ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+          <span className="font-medium">Else {rule.elseEnabled ? 'Enabled' : 'Disabled'}</span>
+        </button>
+      </div>
+
+      {/* ELSE Section */}
+      {rule.elseEnabled && (
+        <div className="border-t border-orange-200 pt-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="font-semibold text-orange-600 text-lg">ELSE</span>
+            <span className="text-gray-500 text-sm">when conditions are not met:</span>
+          </div>
+
+          <div className="ml-4">
+            {rule.elseConditions.length > 0 && (
+              <div className="mb-4">
+                <div className="text-sm text-gray-600 mb-2 font-medium">Additional conditions:</div>
+                {rule.elseConditions.map(item =>
+                  item.type === 'group'
+                    ? this.renderConditionGroup(item, rule.id, true)
+                    : this.renderCondition(item, rule.id, true)
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => this.addCondition(rule.id, true)}
+                    className="flex items-center gap-2 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-md border border-blue-200"
+                  >
+                    <Plus size={16} />
+                    Add Condition
+                  </button>
+                  <button
+                    onClick={() => this.addConditionGroup(rule.id, true)}
+                    className="flex items-center gap-2 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-md border border-blue-200"
+                  >
+                    <Plus size={16} />
+                    Add Group
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="text-sm text-gray-600 mb-2 font-medium">Actions to execute:</div>
+            {rule.elseActions.map(action => this.renderAction(action, rule.id, true))}
+            <button
+              onClick={() => this.addAction(rule.id, true)}
+              className="flex items-center gap-2 px-3 py-2 text-green-600 hover:bg-green-50 rounded-md border border-green-200"
+            >
+              <Plus size={16} />
+              Add Action
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  render() {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="mb-6 bg-white p-6 rounded-lg shadow-sm">
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">Conditional Rule Builder</h1>
+            <p className="text-gray-600">Build complex if-else conditions with nested rules and multiple actions</p>
+          </div>
+
+          <div className="space-y-6">
+            {this.state.rules.map(rule => this.renderRule(rule))}
+          </div>
+
+          <div className="mt-6 bg-white p-4 rounded-lg shadow-sm">
+            <div className="flex gap-4 mb-4">
+              <button
+                onClick={() => this.setState(prevState => ({
+                  rules: [...prevState.rules, this.createNewRule()]
+                }))}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                <Plus size={16} />
+                Add New Rule
+              </button>
+
+              <button
+                onClick={() => console.log('Rules:', JSON.stringify(this.state.rules, null, 2))}
+                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+              >
+                Export Rules
+              </button>
+            </div>
+
+            <div className="border-t pt-4">
+              <h3 className="font-semibold mb-2 text-gray-700">Current Rules Structure:</h3>
+              <pre className="text-xs bg-gray-100 p-3 rounded border overflow-auto max-h-64 text-gray-800">
+                {JSON.stringify(this.state.rules, null, 2)}
+              </pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+}
+
+export default ConditionalRuleBuilder;
